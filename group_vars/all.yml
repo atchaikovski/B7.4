@@ -1,0 +1,45 @@
+# Ansible
+# ansible_user: root
+
+# Kubernetes
+kube_version: v1.21
+token: erfqvkmnqer;gev.qljkfvnb0f7
+
+init_opts: ""
+kubeadm_opts: ""
+service_cidr: "10.12.0.0/12"
+pod_network_cidr: "10.144.0.0/16"
+
+# Network implementation('flannel', 'calico', 'canal')
+network: calico
+
+# Change this to an appropriate interface, preferably a private network.
+# For example, on DigitalOcean, you would use eth1 as that is the default private network interface.
+network_interface: ""
+
+enable_dashboard: yes
+
+# A list of insecure registries you might need to define
+# insecure_registries: []
+insecure_registries: ['gcr.io']
+
+systemd_dir: /lib/systemd/system
+system_env_dir: /etc/sysconfig
+network_dir: /etc/kubernetes/network
+kubeadmin_config: /etc/kubernetes/admin.conf
+kube_addon_dir: /etc/kubernetes/addon
+
+# Additional feature to install
+additional_features:
+  helm: false
+  metallb: false
+  healthcheck: false
+
+# temporary directory used by additional features
+tmp_dir: /tmp/kubeadm-ansible-files
+
+# Container runtimes ('containerd', 'crio')
+container_runtime: containerd
+
+# helm helm version
+helm_version: "v3.7.0"
