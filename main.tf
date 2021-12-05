@@ -65,38 +65,25 @@ resource "aws_instance" "master" {
   ami                         = data.aws_ami.latest_amazon_linux.id
   instance_type               = var.instance_type
   vpc_security_group_ids      = [aws_security_group.master.id]
-  monitoring                  = var.enable_detailed_monitoring
+#  monitoring                  = var.enable_detailed_monitoring
   key_name                    = "aws_adhoc"
+  count                       = 1
+  labels                      = {
+    ansible-group = "master" 
+  }
   associate_public_ip_address = true
   
-    provisioner "file" {
-      source      = "${path.module}/pack.tar.gz"
-      destination = "pack.tar.gz"
-      
-      connection {
-         type        = "ssh"
-         user        = "ec2-user"
-         host        = "${element(aws_instance.master.*.public_ip, 0)}"
-         private_key = "${file("~/.ssh/aws_adhoc.pem")}"      
-      } 
-    } 
-
-    provisioner "remote-exec" {
-      connection {
-         type        = "ssh"
-         user        = "ec2-user"
-         host        = "${element(aws_instance.master.*.public_ip, 0)}"
-         private_key = "${file("~/.ssh/aws_adhoc.pem")}"      
-      } 
-
-    inline = [
-      "tar zxvf pack.tar.gz",
-      "chmod +x install_kubeadm.sh",
-      "./install_kubeadm.sh"
-    ]
+  # provision by ansible as master using public IP
+  provisioner "local-exec" {
+      command = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -u root -i '${element(aws_instance.master.*.public_ip, 0)},' --private-key ${var.private_key} -e 'pub_key=${var.public_key}' site.yaml"
   }
 
-  tags = merge(var.common_tags, { Name = "master Server" })
+  tags { 
+    Name = "master Server"
+    ansibleFilter = "K8S01"
+    ansibleNodeType = "master"
+    ansibleNodeName = "master${count.index}"
+  }
 
 }
 
@@ -104,41 +91,45 @@ resource "aws_instance" "worker" {
   ami                         = data.aws_ami.latest_amazon_linux.id
   instance_type               = var.instance_type
   vpc_security_group_ids      = [aws_security_group.worker.id]
-  monitoring                  = var.enable_detailed_monitoring
+#  monitoring                  = var.enable_detailed_monitoring
   key_name                    = "aws_adhoc"
-  associate_public_ip_address = true
-  
-    provisioner "file" {
-      source      = "${path.module}/pack.tar.gz"
-      destination = "pack.tar.gz"
-      
-      connection {
-         type        = "ssh"
-         user        = "ec2-user"
-         host        = "${element(aws_instance.master.*.public_ip, 0)}"
-         private_key = "${file("~/.ssh/aws_adhoc.pem")}"      
-      } 
-    } 
-
-   provisioner "remote-exec" {
-      connection {
-         type        = "ssh"
-         user        = "ec2-user"
-         host        = "${element(aws_instance.master.*.public_ip, 0)}"
-         private_key = "${file("~/.ssh/aws_adhoc.pem")}"      
-      } 
-
-    inline = [
-      "tar zxvf pack.tar.gz",
-      "chmod +x install_kubeadm.sh",
-      "./install_kubeadm.sh"
-    ]
+  count                       = 1
+  labels                      = {
+    ansible-group = "worker" 
   }
+  associate_public_ip_address = true
 
-  tags = merge(var.common_tags, { Name = "worker Server" })
-
+  # provision by ansible as worker using public IP
+  provisioner "local-exec" {
+      command = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -u root -i '${element(aws_instance.worker.*.public_ip, 0)},' --private-key ${var.private_key} -e 'pub_key=${var.public_key}' site.yaml"
+  }
+ 
+ tags {
+    Name = "worker Server"
+    ansibleFilter = "K8S01"
+    ansibleNodeType = "worker"
+    ansibleNodeName = "worker${count.index}"
+ }
 }
 
+# --------------- get ansible inventory file ---------------
+resource "local_file" "ansible_inventory" {
+  content = templatefile("inventory.tmpl",
+    {
+     ansible_group_shards = google_compute_instance.shard.*.labels.ansible-group,
+     ansible_group_index = google_compute_instance.shard.*.labels.ansible-index,
+     hostname_shards = google_compute_instance.shard.*.name,
+     ansible_group_cfg = google_compute_instance.cfg.*.labels.ansible-group,
+     hostname_cfg = google_compute_instance.cfg.*.name,
+     ansible_group_mongos = google_compute_instance.mongos.*.labels.ansible-group,
+     hostname_mongos = google_compute_instance.mongos.*.name,
+     number_of_shards = range(var.shard_count)
+    }
+  )
+  filename = "inventory"
+}
+
+# --------------- get static IP addresses ------------------
 
 resource "aws_eip" "master_static_ip" {
   instance = aws_instance.master.id

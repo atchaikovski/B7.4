@@ -39,3 +39,7 @@ variable "worker_host_name" {
   type = string
   default = "worker"
 }
+
+variable "public_key" {}
+
+variable "private_key" {}
